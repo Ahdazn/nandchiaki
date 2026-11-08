@@ -98,6 +98,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 			showOverlay()
 		}
 
+		binding.editLayoutButton.setOnClickListener {
+			val controls = supportFragmentManager.findFragmentById(R.id.controlsFragment) as? TouchControlsFragment
+			if(controls != null)
+			{
+				viewModel.setOnScreenControlsEnabled(true)
+				hideOverlay()
+				controls.startLayoutEdit()
+			}
+		}
+
 		//Display streaming
 		//viewModel.session.attachToTextureView(textureView)
 		viewModel.session.attachToSurfaceView(binding.surfaceView)
