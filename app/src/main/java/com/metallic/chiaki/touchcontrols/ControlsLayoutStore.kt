@@ -21,6 +21,7 @@ class ControlsLayoutStore(context: Context)
 		private const val KEY_DATA = "data"
 		private const val KEY_ACTIVE = "active"
 		private const val KEY_PROFILES = "profiles"
+		private const val KEY_LOOK = "_look"
 	}
 
 	/**
@@ -33,6 +34,14 @@ class ControlsLayoutStore(context: Context)
 		val scale: Float = 1f,
 		val alpha: Float = 1f,
 		val visible: Boolean = true)
+
+	/**
+	 * Settings of the touch-look area (swipe to turn the camera), stored per profile.
+	 * @param sensitivity 0.2 .. 3.0, 1.0 is the default
+	 */
+	data class LookSettings(
+		val sensitivity: Float = 1f,
+		val invertY: Boolean = false)
 
 	private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -145,6 +154,23 @@ class ControlsLayoutStore(context: Context)
 		data.put(KEY_ACTIVE, DEFAULT_PROFILE)
 		save()
 		return true
+	}
+
+	fun getLookSettings(): LookSettings
+	{
+		val o = profile().optJSONObject(KEY_LOOK) ?: return LookSettings()
+		return LookSettings(
+			sensitivity = o.optDouble("sens", 1.0).toFloat(),
+			invertY = o.optBoolean("invY", false))
+	}
+
+	fun setLookSettings(settings: LookSettings)
+	{
+		val o = JSONObject()
+		o.put("sens", settings.sensitivity.toDouble())
+		o.put("invY", settings.invertY)
+		profile().put(KEY_LOOK, o)
+		save()
 	}
 
 	private fun save()

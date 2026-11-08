@@ -97,12 +97,18 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 			rightY = quantizeStick(it.y)
 		}}
 
+		binding.touchLookView.stateChangedCallback = { ownControllerState = ownControllerState.copy().apply {
+			rightX = quantizeStick(it.x)
+			rightY = quantizeStick(it.y)
+		}}
+
 		// listed in drawing order (bottom to top), which is also the priority for selecting overlapping controls
 		layoutEditor = ControlsLayoutEditor(
 			binding.root,
 			listOf(
 				ControlsLayoutEditor.Control("leftStick", "Stik kiri", binding.leftAnalogStickView),
 				ControlsLayoutEditor.Control("rightStick", "Stik kanan", binding.rightAnalogStickView),
+				ControlsLayoutEditor.Control("look", "Area kamera (look)", binding.touchLookView),
 				ControlsLayoutEditor.Control("touchpad", "Touchpad", binding.touchpadView),
 				ControlsLayoutEditor.Control("dpad", "D-Pad", binding.dpadView),
 				ControlsLayoutEditor.Control("face", "Tombol aksi", binding.faceButtonsLayout),
@@ -117,7 +123,13 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 				ControlsLayoutEditor.Control("options", "Options", binding.optionsButtonView)
 			),
 			ControlsLayoutStore(requireContext())
-		).also { it.applyLayout() }
+		).also {
+			it.onLookSettingsChanged = { s ->
+				binding.touchLookView.sensitivity = s.sensitivity
+				binding.touchLookView.invertY = s.invertY
+			}
+			it.applyLayout()
+		}
 
 		onScreenControlsEnabled?.observe(viewLifecycleOwner, Observer {
 			view.visibility = if(it) View.VISIBLE else View.GONE

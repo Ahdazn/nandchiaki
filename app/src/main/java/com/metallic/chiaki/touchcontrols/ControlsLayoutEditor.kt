@@ -22,6 +22,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.Item
+import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.LookSettings
 import kotlin.math.roundToInt
 
 /**
@@ -55,6 +56,10 @@ class ControlsLayoutEditor(
 
 	var onEditModeChanged: ((Boolean) -> Unit)? = null
 
+	/** Called whenever the touch-look settings change (also when a profile is loaded) */
+	var onLookSettingsChanged: ((LookSettings) -> Unit)? = null
+	private var lookSettings = LookSettings()
+
 	private val state = HashMap<String, Item>()
 	private var selected: Control? = null
 
@@ -70,6 +75,11 @@ class ControlsLayoutEditor(
 	private var alphaLabel: TextView? = null
 	private var updatingPanel = false
 
+	private var lookRow: LinearLayout? = null
+	private var lookSensBar: SeekBar? = null
+	private var lookSensLabel: TextView? = null
+	private var lookInvertSwitch: SwitchMaterial? = null
+
 	private fun dp(value: Int): Int = (value * density).toInt()
 
 	private fun item(control: Control): Item = state[control.key] ?: Item()
@@ -78,6 +88,7 @@ class ControlsLayoutEditor(
 	{
 		state.clear()
 		controls.forEach { state[it.key] = store.getItem(it.key) }
+		lookSettings = store.getLookSettings()
 	}
 
 	private fun persist(control: Control)
@@ -95,6 +106,7 @@ class ControlsLayoutEditor(
 	private fun applyAll()
 	{
 		controls.forEach { applyItem(it) }
+		onLookSettingsChanged?.invoke(lookSettings)
 	}
 
 	private fun applyItem(control: Control)
@@ -289,6 +301,53 @@ class ControlsLayoutEditor(
 			addView(alphaBar)
 		}
 
+		val lookHint = label("Usap area ini untuk memutar kamera (meniru stik kanan).").apply {
+			textSize = 12f
+			alpha = 0.75f
+		}
+		val lookSensLabel = label("Sensitivitas", 110)
+		this.lookSensLabel = lookSensLabel
+		val lookSensBar = SeekBar(context).apply {
+			max = ((TouchLookView.MAX_SENSITIVITY - TouchLookView.MIN_SENSITIVITY) * 100f).roundToInt()
+			layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+			setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener
+			{
+				override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean)
+				{
+					if(!fromUser || updatingPanel)
+						return
+					updateLook { it.copy(sensitivity = TouchLookView.MIN_SENSITIVITY + progress / 100f) }
+				}
+				override fun onStartTrackingTouch(seekBar: SeekBar) {}
+				override fun onStopTrackingTouch(seekBar: SeekBar) {}
+			})
+		}
+		this.lookSensBar = lookSensBar
+		val lookSensRow = LinearLayout(context).apply {
+			orientation = LinearLayout.HORIZONTAL
+			gravity = Gravity.CENTER_VERTICAL
+			addView(lookSensLabel)
+			addView(lookSensBar)
+		}
+		val lookInvert = SwitchMaterial(context).apply {
+			text = "Balik sumbu vertikal"
+			setTextColor(Color.WHITE)
+			setOnCheckedChangeListener { _, checked ->
+				if(updatingPanel)
+					return@setOnCheckedChangeListener
+				updateLook { it.copy(invertY = checked) }
+			}
+		}
+		this.lookInvertSwitch = lookInvert
+		val newLookRow = LinearLayout(context).apply {
+			orientation = LinearLayout.VERTICAL
+			visibility = View.GONE
+			addView(lookHint)
+			addView(lookSensRow)
+			addView(lookInvert)
+		}
+		this.lookRow = newLookRow
+
 		val buttonRow = LinearLayout(context).apply {
 			orientation = LinearLayout.HORIZONTAL
 			setPadding(0, dp(6), 0, 0)
@@ -307,6 +366,7 @@ class ControlsLayoutEditor(
 			addView(topRow)
 			addView(sizeRow)
 			addView(alphaRow)
+			addView(newLookRow)
 			addView(buttonRow)
 		}
 	}
@@ -318,6 +378,7 @@ class ControlsLayoutEditor(
 		if(c == null)
 		{
 			titleText?.text = "Ketuk sebuah kontrol untuk memilihnya"
+			lookRow?.visibility = View.GONE
 		}
 		else
 		{
@@ -326,6 +387,9 @@ class ControlsLayoutEditor(
 			visibleSwitch?.isChecked = i.visible
 			sizeBar?.progress = ((i.scale - MIN_SCALE) * 100f).roundToInt()
 			alphaBar?.progress = ((i.alpha - MIN_ALPHA) * 100f).roundToInt()
+			lookRow?.visibility = if(c.key == "look") View.VISIBLE else View.GONE
+			lookSensBar?.progress = ((lookSettings.sensitivity - TouchLookView.MIN_SENSITIVITY) * 100f).roundToInt()
+			lookInvertSwitch?.isChecked = lookSettings.invertY
 		}
 		updatingPanel = false
 		refreshLabels()
@@ -338,6 +402,7 @@ class ControlsLayoutEditor(
 		val i = item(c)
 		sizeLabel?.text = "Ukuran ${(i.scale * 100f).roundToInt()}%"
 		alphaLabel?.text = "Transparansi ${(i.alpha * 100f).roundToInt()}%"
+		lookSensLabel?.text = "Sensitivitas ${(lookSettings.sensitivity * 100f).roundToInt()}%"
 	}
 
 	private fun updateSelected(transform: (Item) -> Item)
@@ -348,11 +413,21 @@ class ControlsLayoutEditor(
 		overlay?.invalidate()
 	}
 
+	private fun updateLook(transform: (LookSettings) -> LookSettings)
+	{
+		lookSettings = transform(lookSettings)
+		store.setLookSettings(lookSettings)
+		onLookSettingsChanged?.invoke(lookSettings)
+		refreshLabels()
+	}
+
 	private fun resetSelected()
 	{
 		val c = selected ?: return
 		store.resetItem(c.key)
 		state[c.key] = Item()
+		if(c.key == "look")
+			updateLook { LookSettings() }
 		applyItem(c)
 		refreshPanel()
 	}
