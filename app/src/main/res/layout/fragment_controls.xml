@@ -47,6 +47,18 @@
         app:drawableHandle="@drawable/control_analog_stick_handle"
         />
 
+    <!-- swipe area that emulates the right stick (camera look); sits above the floating right stick, below the buttons -->
+    <com.metallic.chiaki.touchcontrols.TouchLookView
+        android:id="@+id/touchLookView"
+        android:layout_width="200dp"
+        android:layout_height="0dp"
+        android:layout_marginLeft="24dp"
+        android:layout_marginTop="96dp"
+        android:layout_marginBottom="16dp"
+        app:layout_constraintLeft_toRightOf="@id/centerGuideline"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
     <com.metallic.chiaki.touchcontrols.TouchpadView
         android:id="@+id/touchpadView"
         android:layout_width="0dp"
