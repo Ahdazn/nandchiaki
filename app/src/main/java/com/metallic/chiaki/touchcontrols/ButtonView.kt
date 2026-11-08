@@ -4,6 +4,7 @@ package com.metallic.chiaki.touchcontrols
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.util.Log
@@ -60,18 +61,38 @@ class ButtonView @JvmOverloads constructor(
 	/**
 	 * If this button overlaps with others in the same layout,
 	 * let the one whose center is closest to the touch handle it.
+	 *
+	 * All math happens in the parent's coordinate space, so buttons that were moved or scaled
+	 * by the layout editor are hit-tested correctly, and hidden buttons are ignored.
 	 */
 	private fun bestFittingTouchView(x: Float, y: Float): View
 	{
-		val loc = locationOnScreen + Vector(x, y)
+		val p = toParentSpace(this, x, y)
 		return (parent as? ViewGroup)?.children?.filter {
-			it is ButtonView
-		}?.filter {
-			val pos = it.locationOnScreen
-			loc.x >= pos.x && loc.x < pos.x + it.width && loc.y >= pos.y && loc.y < pos.y + it.height
+			it is ButtonView && it.visibility == View.VISIBLE && containsParentPoint(it, p[0], p[1])
 		}?.sortedBy {
-			(loc - (it.locationOnScreen + Vector(it.width.toFloat(), it.height.toFloat()) * 0.5f)).lengthSq
+			val c = toParentSpace(it, it.width / 2f, it.height / 2f)
+			(p[0] - c[0]) * (p[0] - c[0]) + (p[1] - c[1]) * (p[1] - c[1])
 		}?.firstOrNull() ?: this
+	}
+
+	private fun toParentSpace(v: View, x: Float, y: Float): FloatArray
+	{
+		val pts = floatArrayOf(x, y)
+		v.matrix.mapPoints(pts)
+		pts[0] += v.x
+		pts[1] += v.y
+		return pts
+	}
+
+	private fun containsParentPoint(v: View, px: Float, py: Float): Boolean
+	{
+		val inverse = Matrix()
+		if(!v.matrix.invert(inverse))
+			return false
+		val pts = floatArrayOf(px - v.x, py - v.y)
+		inverse.mapPoints(pts)
+		return pts[0] >= 0f && pts[0] < v.width && pts[1] >= 0f && pts[1] < v.height
 	}
 
 	override fun onTouchEvent(event: MotionEvent): Boolean

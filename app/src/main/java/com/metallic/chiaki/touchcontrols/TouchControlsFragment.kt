@@ -37,12 +37,23 @@ abstract class TouchControlsFragment : Fragment()
 		controllerStateProxy.flatMap { it }
 
 	var onScreenControlsEnabled: LiveData<Boolean>? = null
+
+	/** Whether the user is currently customizing the layout of the on-screen controls. */
+	open val isLayoutEditing: Boolean get() = false
+	open fun startLayoutEdit() {}
+	open fun stopLayoutEdit() {}
 }
 
 class DefaultTouchControlsFragment : TouchControlsFragment()
 {
 	private var _binding: FragmentControlsBinding? = null
 	private val binding get() = _binding!!
+
+	private var layoutEditor: ControlsLayoutEditor? = null
+
+	override val isLayoutEditing: Boolean get() = layoutEditor?.editing == true
+	override fun startLayoutEdit() { layoutEditor?.startEditing() }
+	override fun stopLayoutEdit() { layoutEditor?.stopEditing() }
 
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
 		FragmentControlsBinding.inflate(inflater, container, false).let {
@@ -86,9 +97,38 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 			rightY = quantizeStick(it.y)
 		}}
 
+		// listed in drawing order (bottom to top), which is also the priority for selecting overlapping controls
+		layoutEditor = ControlsLayoutEditor(
+			binding.root,
+			listOf(
+				ControlsLayoutEditor.Control("leftStick", "Stik kiri", binding.leftAnalogStickView),
+				ControlsLayoutEditor.Control("rightStick", "Stik kanan", binding.rightAnalogStickView),
+				ControlsLayoutEditor.Control("touchpad", "Touchpad", binding.touchpadView),
+				ControlsLayoutEditor.Control("dpad", "D-Pad", binding.dpadView),
+				ControlsLayoutEditor.Control("face", "Tombol aksi", binding.faceButtonsLayout),
+				ControlsLayoutEditor.Control("l3", "L3", binding.l3ButtonView),
+				ControlsLayoutEditor.Control("r3", "R3", binding.r3ButtonView),
+				ControlsLayoutEditor.Control("ps", "PS", binding.psButtonView),
+				ControlsLayoutEditor.Control("l2", "L2", binding.l2ButtonView),
+				ControlsLayoutEditor.Control("l1", "L1", binding.l1ButtonView),
+				ControlsLayoutEditor.Control("share", "Share", binding.shareButtonView),
+				ControlsLayoutEditor.Control("r2", "R2", binding.r2ButtonView),
+				ControlsLayoutEditor.Control("r1", "R1", binding.r1ButtonView),
+				ControlsLayoutEditor.Control("options", "Options", binding.optionsButtonView)
+			),
+			ControlsLayoutStore(requireContext())
+		).also { it.applyLayout() }
+
 		onScreenControlsEnabled?.observe(viewLifecycleOwner, Observer {
 			view.visibility = if(it) View.VISIBLE else View.GONE
 		})
+	}
+
+	override fun onDestroyView()
+	{
+		layoutEditor?.stopEditing()
+		layoutEditor = null
+		super.onDestroyView()
 	}
 
 	private fun dpadStateChanged(direction: DPadView.Direction?)
