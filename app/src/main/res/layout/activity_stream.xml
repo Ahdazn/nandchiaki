@@ -75,6 +75,19 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:switchPadding="8dp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/editLayoutButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Edit layout"
+                android:textAllCaps="false"
+                android:textColor="@color/stream_text"
+                app:strokeColor="@color/stream_text"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/displayModeToggle" />
+
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/displayModeToggle"
                 android:layout_width="wrap_content"
