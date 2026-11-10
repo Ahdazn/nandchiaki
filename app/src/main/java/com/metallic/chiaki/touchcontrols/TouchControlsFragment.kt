@@ -108,8 +108,8 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 			listOf(
 				ControlsLayoutEditor.Control("leftStick", "Stik kiri", binding.leftAnalogStickView),
 				ControlsLayoutEditor.Control("rightStick", "Stik kanan", binding.rightAnalogStickView),
-				ControlsLayoutEditor.Control("look", "Area kamera (look)", binding.touchLookView),
-				ControlsLayoutEditor.Control("touchpad", "Touchpad", binding.touchpadView),
+				ControlsLayoutEditor.Control("look", "Area kamera (look)", binding.touchLookView, freeResize = true),
+				ControlsLayoutEditor.Control("touchpad", "Touchpad", binding.touchpadView, freeResize = true),
 				ControlsLayoutEditor.Control("dpad", "D-Pad", binding.dpadView),
 				ControlsLayoutEditor.Control("face", "Tombol aksi", binding.faceButtonsLayout),
 				ControlsLayoutEditor.Control("l3", "L3", binding.l3ButtonView),

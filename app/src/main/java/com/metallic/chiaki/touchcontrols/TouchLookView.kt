@@ -73,12 +73,6 @@ class TouchLookView @JvmOverloads constructor(
 		color = Color.argb(90, 255, 255, 255)
 	}
 
-	private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-		color = Color.argb(110, 255, 255, 255)
-		textAlign = Paint.Align.CENTER
-		textSize = 13f * density
-	}
-
 	private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 		style = Paint.Style.STROKE
 		strokeWidth = 3f * density
@@ -146,7 +140,6 @@ class TouchLookView @JvmOverloads constructor(
 		val corner = 16f * density
 		canvas.drawRoundRect(areaRect, corner, corner, fillPaint)
 		canvas.drawRoundRect(areaRect, corner, corner, strokePaint)
-		canvas.drawText("KAMERA", width / 2f, height / 2f, textPaint)
 		if(pointerId >= 0)
 			canvas.drawCircle(touchX, touchY, 28f * density, ringPaint)
 	}

@@ -32,6 +32,8 @@ class ControlsLayoutStore(context: Context)
 		val x: Float = 0f,
 		val y: Float = 0f,
 		val scale: Float = 1f,
+		/** vertical scale; by default the same as [scale] */
+		val scaleY: Float = scale,
 		val alpha: Float = 1f,
 		val visible: Boolean = true)
 
@@ -98,6 +100,7 @@ class ControlsLayoutStore(context: Context)
 			x = o.optDouble("x", 0.0).toFloat(),
 			y = o.optDouble("y", 0.0).toFloat(),
 			scale = o.optDouble("s", 1.0).toFloat(),
+			scaleY = o.optDouble("sy", o.optDouble("s", 1.0)).toFloat(),
 			alpha = o.optDouble("a", 1.0).toFloat(),
 			visible = o.optBoolean("v", true))
 	}
@@ -108,6 +111,7 @@ class ControlsLayoutStore(context: Context)
 		o.put("x", item.x.toDouble())
 		o.put("y", item.y.toDouble())
 		o.put("s", item.scale.toDouble())
+		o.put("sy", item.scaleY.toDouble())
 		o.put("a", item.alpha.toDouble())
 		o.put("v", item.visible)
 		profile().put(key, o)

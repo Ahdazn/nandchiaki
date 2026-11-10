@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -23,6 +24,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.Item
 import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.LookSettings
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -37,7 +39,8 @@ class ControlsLayoutEditor(
 	private val store: ControlsLayoutStore)
 {
 	/** @param view must be a direct child of root. Later entries are considered "on top" for hit testing. */
-	data class Control(val key: String, val label: String, val view: View)
+	/** @param freeResize if true, pinching changes width and height independently; otherwise the control is scaled uniformly */
+	data class Control(val key: String, val label: String, val view: View, val freeResize: Boolean = false)
 
 	companion object
 	{
@@ -46,6 +49,12 @@ class ControlsLayoutEditor(
 		private const val MIN_ALPHA = 0.2f
 		private const val MAX_ALPHA = 1.0f
 		private const val HIDDEN_PREVIEW_ALPHA = 0.3f
+
+		// limits for pinch resizing
+		private const val PINCH_MIN_UNIFORM = 0.4f
+		private const val PINCH_MAX_UNIFORM = 3.0f
+		private const val PINCH_MIN_FREE = 0.2f
+		private const val PINCH_MAX_FREE = 10.0f
 	}
 
 	private val context: Context = root.context
@@ -116,7 +125,7 @@ class ControlsLayoutEditor(
 		v.translationX = i.x * density
 		v.translationY = i.y * density
 		v.scaleX = i.scale
-		v.scaleY = i.scale
+		v.scaleY = i.scaleY
 		if(editing)
 		{
 			// hidden controls stay visible (dimmed) while editing, so they can be re-enabled
@@ -249,7 +258,12 @@ class ControlsLayoutEditor(
 			addView(visibleSwitch)
 		}
 
-		val sizeLabel = label("Ukuran", 110)
+		val hintLine = label("Seret untuk memindah \u00B7 cubit dengan dua jari untuk mengubah ukuran").apply {
+			textSize = 11f
+			alpha = 0.7f
+		}
+
+		val sizeLabel = label("Ukuran", 150)
 		this.sizeLabel = sizeLabel
 		val sizeBar = SeekBar(context).apply {
 			max = ((MAX_SCALE - MIN_SCALE) * 100f).roundToInt()
@@ -260,7 +274,12 @@ class ControlsLayoutEditor(
 				{
 					if(!fromUser || updatingPanel)
 						return
-					updateSelected { it.copy(scale = MIN_SCALE + progress / 100f) }
+					updateSelected {
+						// keep the width/height ratio, only the overall size changes
+						val s = MIN_SCALE + progress / 100f
+						val ratio = if(it.scale > 0f) it.scaleY / it.scale else 1f
+						it.copy(scale = s, scaleY = s * ratio)
+					}
 					refreshLabels()
 				}
 				override fun onStartTrackingTouch(seekBar: SeekBar) {}
@@ -301,6 +320,9 @@ class ControlsLayoutEditor(
 			addView(alphaBar)
 		}
 
+		val lookFillButton = panelButton("Penuhi setengah layar kanan") { fillRightHalf() }.apply {
+			layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+		}
 		val lookHint = label("Usap area ini untuk memutar kamera (meniru stik kanan).").apply {
 			textSize = 12f
 			alpha = 0.75f
@@ -345,6 +367,7 @@ class ControlsLayoutEditor(
 			addView(lookHint)
 			addView(lookSensRow)
 			addView(lookInvert)
+			addView(lookFillButton)
 		}
 		this.lookRow = newLookRow
 
@@ -364,6 +387,7 @@ class ControlsLayoutEditor(
 			setPadding(dp(12), dp(10), dp(12), dp(10))
 			isClickable = true
 			addView(topRow)
+			addView(hintLine)
 			addView(sizeRow)
 			addView(alphaRow)
 			addView(newLookRow)
@@ -400,7 +424,10 @@ class ControlsLayoutEditor(
 	{
 		val c = selected ?: return
 		val i = item(c)
-		sizeLabel?.text = "Ukuran ${(i.scale * 100f).roundToInt()}%"
+		sizeLabel?.text = if(c.freeResize && abs(i.scale - i.scaleY) > 0.01f)
+			"Ukuran ${(i.scale * 100f).roundToInt()}% \u00D7 ${(i.scaleY * 100f).roundToInt()}%"
+		else
+			"Ukuran ${(i.scale * 100f).roundToInt()}%"
 		alphaLabel?.text = "Transparansi ${(i.alpha * 100f).roundToInt()}%"
 		lookSensLabel?.text = "Sensitivitas ${(lookSettings.sensitivity * 100f).roundToInt()}%"
 	}
@@ -411,6 +438,32 @@ class ControlsLayoutEditor(
 		state[c.key] = transform(item(c))
 		applyItem(c)
 		overlay?.invalidate()
+	}
+
+	private fun clampScale(control: Control, value: Float): Float =
+		if(control.freeResize) value.coerceIn(PINCH_MIN_FREE, PINCH_MAX_FREE) else value.coerceIn(PINCH_MIN_UNIFORM, PINCH_MAX_UNIFORM)
+
+	/** Stretches the selected control so that it covers the whole right half of the screen. */
+	private fun fillRightHalf()
+	{
+		val c = selected ?: return
+		val v = c.view
+		if(v.width <= 0 || v.height <= 0 || root.width <= 0 || root.height <= 0)
+			return
+		val baseCx = v.left + v.width / 2f
+		val baseCy = v.top + v.height / 2f
+		val targetCx = root.width * 0.75f
+		val targetCy = root.height * 0.5f
+		val sx = clampScale(c, (root.width / 2f) / v.width)
+		val sy = clampScale(c, root.height.toFloat() / v.height)
+		state[c.key] = item(c).copy(
+			x = (targetCx - baseCx) / density,
+			y = (targetCy - baseCy) / density,
+			scale = sx,
+			scaleY = sy)
+		applyItem(c)
+		persist(c)
+		refreshPanel()
 	}
 
 	private fun updateLook(transform: (LookSettings) -> LookSettings)
@@ -566,6 +619,53 @@ class ControlsLayoutEditor(
 		private var lastX = 0f
 		private var lastY = 0f
 
+		/** Pinch with two fingers: resizes the selected control. Free-resize controls change width/height independently. */
+		private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener()
+		{
+			override fun onScaleBegin(detector: ScaleGestureDetector): Boolean
+			{
+				dragging = false
+				val hit = controls.lastOrNull { boundsOf(it.view).contains(detector.focusX, detector.focusY) }
+				if(hit != null)
+				{
+					selected = hit
+					refreshPanel()
+				}
+				return selected != null
+			}
+
+			override fun onScale(detector: ScaleGestureDetector): Boolean
+			{
+				val c = selected ?: return false
+				val i = item(c)
+				var sx = i.scale
+				var sy = i.scaleY
+				if(c.freeResize)
+				{
+					// the span along each axis is only meaningful if the fingers are far enough apart on that axis
+					val minSpan = dp(24).toFloat()
+					if(detector.previousSpanX > minSpan && detector.currentSpanX > minSpan)
+						sx *= detector.currentSpanX / detector.previousSpanX
+					if(detector.previousSpanY > minSpan && detector.currentSpanY > minSpan)
+						sy *= detector.currentSpanY / detector.previousSpanY
+				}
+				else
+				{
+					sx *= detector.scaleFactor
+					sy *= detector.scaleFactor
+				}
+				state[c.key] = i.copy(scale = clampScale(c, sx), scaleY = clampScale(c, sy))
+				applyItem(c)
+				refreshPanel()
+				return true
+			}
+
+			override fun onScaleEnd(detector: ScaleGestureDetector)
+			{
+				selected?.let { persist(it) }
+			}
+		}).apply { isQuickScaleEnabled = false }
+
 		override fun onDraw(canvas: Canvas)
 		{
 			canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
@@ -579,6 +679,10 @@ class ControlsLayoutEditor(
 
 		override fun onTouchEvent(event: MotionEvent): Boolean
 		{
+			scaleDetector.onTouchEvent(event)
+			if(scaleDetector.isInProgress)
+				return true
+
 			when(event.actionMasked)
 			{
 				MotionEvent.ACTION_DOWN ->
