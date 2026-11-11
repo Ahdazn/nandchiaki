@@ -9,6 +9,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.metallic.chiaki.common.LogManager
 import com.metallic.chiaki.lib.*
+import com.metallic.chiaki.stream.FsrSurfaceView
 
 sealed class StreamState
 object StreamStateIdle: StreamState()
@@ -111,6 +112,18 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 				session?.setSurface(null)
 			}
 		})
+	}
+
+	/**
+	 * Like [attachToSurfaceView], but for a [FsrSurfaceView] that decides itself which surface
+	 * the decoder renders into (the view directly, or an intermediate surface for FSR / sharpening).
+	 */
+	fun attachToFsrView(view: FsrSurfaceView)
+	{
+		view.videoSurfaceChangedCallback = { newSurface ->
+			this.surface = newSurface
+			session?.setSurface(newSurface)
+		}
 	}
 
 	fun attachToTextureView(textureView: TextureView)
