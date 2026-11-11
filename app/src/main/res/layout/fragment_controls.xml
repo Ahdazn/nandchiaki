@@ -255,4 +255,14 @@
         app:layout_constraintRight_toLeftOf="@id/r2ButtonView"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- button for gyro aiming; only drawn if the gyro mode uses a button (hold / toggle) -->
+    <com.metallic.chiaki.touchcontrols.GyroButtonView
+        android:id="@+id/gyroButtonView"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginRight="16dp"
+        app:layout_constraintRight_toLeftOf="@id/faceButtonsLayout"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
