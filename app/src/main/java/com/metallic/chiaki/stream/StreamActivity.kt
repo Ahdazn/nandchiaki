@@ -110,7 +110,18 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		//Display streaming
 		//viewModel.session.attachToTextureView(textureView)
-		viewModel.session.attachToSurfaceView(binding.surfaceView)
+		val enhancePrefs = VideoEnhancePrefs(this)
+		val enhanceProfile = viewModel.session.connectInfo.videoProfile
+		binding.surfaceView.setVideoSize(enhanceProfile.width, enhanceProfile.height)
+		binding.surfaceView.onEnhanceError = { message ->
+			android.widget.Toast.makeText(this, "Peningkat video gagal ($message). Kembali ke tampilan biasa.", android.widget.Toast.LENGTH_LONG).show()
+		}
+		binding.surfaceView.setEnhancement(enhancePrefs.mode, enhancePrefs.strength)
+		viewModel.session.attachToFsrView(binding.surfaceView)
+		binding.videoEnhanceButton.setOnClickListener {
+			showVideoEnhanceDialog(this, binding.surfaceView, enhancePrefs)
+			showOverlay()
+		}
 		viewModel.session.state.observe(this, Observer { this.stateChanged(it) })
 		adjustStreamViewAspect()
 
