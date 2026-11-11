@@ -23,6 +23,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.Item
+import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.GyroSettings
 import com.metallic.chiaki.touchcontrols.ControlsLayoutStore.LookSettings
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -69,6 +70,10 @@ class ControlsLayoutEditor(
 	var onLookSettingsChanged: ((LookSettings) -> Unit)? = null
 	private var lookSettings = LookSettings()
 
+	/** Called whenever the gyro aiming settings change (also when a profile is loaded) */
+	var onGyroSettingsChanged: ((GyroSettings) -> Unit)? = null
+	private var gyroSettings = GyroSettings()
+
 	private val state = HashMap<String, Item>()
 	private var selected: Control? = null
 
@@ -89,6 +94,13 @@ class ControlsLayoutEditor(
 	private var lookSensLabel: TextView? = null
 	private var lookInvertSwitch: SwitchMaterial? = null
 
+	private var gyroRow: LinearLayout? = null
+	private var gyroModeButton: MaterialButton? = null
+	private var gyroSensBar: SeekBar? = null
+	private var gyroSensLabel: TextView? = null
+	private var gyroInvertX: SwitchMaterial? = null
+	private var gyroInvertY: SwitchMaterial? = null
+
 	private fun dp(value: Int): Int = (value * density).toInt()
 
 	private fun item(control: Control): Item = state[control.key] ?: Item()
@@ -98,6 +110,7 @@ class ControlsLayoutEditor(
 		state.clear()
 		controls.forEach { state[it.key] = store.getItem(it.key) }
 		lookSettings = store.getLookSettings()
+		gyroSettings = store.getGyroSettings()
 	}
 
 	private fun persist(control: Control)
@@ -116,6 +129,7 @@ class ControlsLayoutEditor(
 	{
 		controls.forEach { applyItem(it) }
 		onLookSettingsChanged?.invoke(lookSettings)
+		onGyroSettingsChanged?.invoke(gyroSettings)
 	}
 
 	private fun applyItem(control: Control)
@@ -371,6 +385,78 @@ class ControlsLayoutEditor(
 		}
 		this.lookRow = newLookRow
 
+		val gyroHint = label("Putar HP untuk menggerakkan stik kanan (gyro aiming).").apply {
+			textSize = 12f
+			alpha = 0.75f
+		}
+		val gyroModeButton = panelButton("") { showGyroModeDialog() }.apply {
+			layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+		}
+		this.gyroModeButton = gyroModeButton
+		val gyroSensLabel = label("Sensitivitas", 110)
+		this.gyroSensLabel = gyroSensLabel
+		val gyroSensBar = SeekBar(context).apply {
+			max = ((GyroAim.MAX_SENSITIVITY - GyroAim.MIN_SENSITIVITY) * 100f).roundToInt()
+			layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+			setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener
+			{
+				override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean)
+				{
+					if(!fromUser || updatingPanel)
+						return
+					updateGyro { it.copy(sensitivity = GyroAim.MIN_SENSITIVITY + progress / 100f) }
+				}
+				override fun onStartTrackingTouch(seekBar: SeekBar) {}
+				override fun onStopTrackingTouch(seekBar: SeekBar) {}
+			})
+		}
+		this.gyroSensBar = gyroSensBar
+		val gyroSensRow = LinearLayout(context).apply {
+			orientation = LinearLayout.HORIZONTAL
+			gravity = Gravity.CENTER_VERTICAL
+			addView(gyroSensLabel)
+			addView(gyroSensBar)
+		}
+		val gyroInvertX = SwitchMaterial(context).apply {
+			text = "Balik kiri-kanan"
+			setTextColor(Color.WHITE)
+			textSize = 12f
+			layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+			setOnCheckedChangeListener { _, checked ->
+				if(updatingPanel)
+					return@setOnCheckedChangeListener
+				updateGyro { it.copy(invertX = checked) }
+			}
+		}
+		this.gyroInvertX = gyroInvertX
+		val gyroInvertY = SwitchMaterial(context).apply {
+			text = "Balik atas-bawah"
+			setTextColor(Color.WHITE)
+			textSize = 12f
+			layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+			setOnCheckedChangeListener { _, checked ->
+				if(updatingPanel)
+					return@setOnCheckedChangeListener
+				updateGyro { it.copy(invertY = checked) }
+			}
+		}
+		this.gyroInvertY = gyroInvertY
+		val gyroInvertRow = LinearLayout(context).apply {
+			orientation = LinearLayout.HORIZONTAL
+			gravity = Gravity.CENTER_VERTICAL
+			addView(gyroInvertX)
+			addView(gyroInvertY)
+		}
+		val newGyroRow = LinearLayout(context).apply {
+			orientation = LinearLayout.VERTICAL
+			visibility = View.GONE
+			addView(gyroHint)
+			addView(gyroModeButton)
+			addView(gyroSensRow)
+			addView(gyroInvertRow)
+		}
+		this.gyroRow = newGyroRow
+
 		val buttonRow = LinearLayout(context).apply {
 			orientation = LinearLayout.HORIZONTAL
 			setPadding(0, dp(6), 0, 0)
@@ -391,6 +477,7 @@ class ControlsLayoutEditor(
 			addView(sizeRow)
 			addView(alphaRow)
 			addView(newLookRow)
+			addView(newGyroRow)
 			addView(buttonRow)
 		}
 	}
@@ -403,6 +490,7 @@ class ControlsLayoutEditor(
 		{
 			titleText?.text = "Ketuk sebuah kontrol untuk memilihnya"
 			lookRow?.visibility = View.GONE
+			gyroRow?.visibility = View.GONE
 		}
 		else
 		{
@@ -414,6 +502,10 @@ class ControlsLayoutEditor(
 			lookRow?.visibility = if(c.key == "look") View.VISIBLE else View.GONE
 			lookSensBar?.progress = ((lookSettings.sensitivity - TouchLookView.MIN_SENSITIVITY) * 100f).roundToInt()
 			lookInvertSwitch?.isChecked = lookSettings.invertY
+			gyroRow?.visibility = if(c.key == "gyro") View.VISIBLE else View.GONE
+			gyroSensBar?.progress = ((gyroSettings.sensitivity - GyroAim.MIN_SENSITIVITY) * 100f).roundToInt()
+			gyroInvertX?.isChecked = gyroSettings.invertX
+			gyroInvertY?.isChecked = gyroSettings.invertY
 		}
 		updatingPanel = false
 		refreshLabels()
@@ -430,6 +522,8 @@ class ControlsLayoutEditor(
 			"Ukuran ${(i.scale * 100f).roundToInt()}%"
 		alphaLabel?.text = "Transparansi ${(i.alpha * 100f).roundToInt()}%"
 		lookSensLabel?.text = "Sensitivitas ${(lookSettings.sensitivity * 100f).roundToInt()}%"
+		gyroSensLabel?.text = "Sensitivitas ${(gyroSettings.sensitivity * 100f).roundToInt()}%"
+		gyroModeButton?.text = "Mode: ${gyroSettings.mode.label}  \u25BE"
 	}
 
 	private fun updateSelected(transform: (Item) -> Item)
@@ -466,6 +560,27 @@ class ControlsLayoutEditor(
 		refreshPanel()
 	}
 
+	private fun updateGyro(transform: (GyroSettings) -> GyroSettings)
+	{
+		gyroSettings = transform(gyroSettings)
+		store.setGyroSettings(gyroSettings)
+		onGyroSettingsChanged?.invoke(gyroSettings)
+		refreshLabels()
+	}
+
+	private fun showGyroModeDialog()
+	{
+		val modes = GyroMode.values()
+		AlertDialog.Builder(context)
+			.setTitle("Mode gyro")
+			.setSingleChoiceItems(modes.map { it.label }.toTypedArray(), modes.indexOf(gyroSettings.mode)) { dialog, which ->
+				updateGyro { it.copy(mode = modes[which]) }
+				dialog.dismiss()
+			}
+			.setNegativeButton("Batal", null)
+			.show()
+	}
+
 	private fun updateLook(transform: (LookSettings) -> LookSettings)
 	{
 		lookSettings = transform(lookSettings)
@@ -481,6 +596,8 @@ class ControlsLayoutEditor(
 		state[c.key] = Item()
 		if(c.key == "look")
 			updateLook { LookSettings() }
+		if(c.key == "gyro")
+			updateGyro { GyroSettings() }
 		applyItem(c)
 		refreshPanel()
 	}

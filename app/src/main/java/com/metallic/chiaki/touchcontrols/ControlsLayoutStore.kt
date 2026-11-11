@@ -22,6 +22,7 @@ class ControlsLayoutStore(context: Context)
 		private const val KEY_ACTIVE = "active"
 		private const val KEY_PROFILES = "profiles"
 		private const val KEY_LOOK = "_look"
+		private const val KEY_GYRO = "_gyro"
 	}
 
 	/**
@@ -43,6 +44,16 @@ class ControlsLayoutStore(context: Context)
 	 */
 	data class LookSettings(
 		val sensitivity: Float = 1f,
+		val invertY: Boolean = false)
+
+	/**
+	 * Settings of gyro aiming (turn the device to move the right stick), stored per profile.
+	 * @param sensitivity 0.2 .. 3.0, 1.0 is the default
+	 */
+	data class GyroSettings(
+		val mode: GyroMode = GyroMode.HOLD,
+		val sensitivity: Float = 1f,
+		val invertX: Boolean = false,
 		val invertY: Boolean = false)
 
 	private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -174,6 +185,35 @@ class ControlsLayoutStore(context: Context)
 		o.put("sens", settings.sensitivity.toDouble())
 		o.put("invY", settings.invertY)
 		profile().put(KEY_LOOK, o)
+		save()
+	}
+
+	fun getGyroSettings(): GyroSettings
+	{
+		val o = profile().optJSONObject(KEY_GYRO) ?: return GyroSettings()
+		val mode = try
+		{
+			GyroMode.valueOf(o.optString("mode", GyroMode.HOLD.name))
+		}
+		catch(e: IllegalArgumentException)
+		{
+			GyroMode.HOLD
+		}
+		return GyroSettings(
+			mode = mode,
+			sensitivity = o.optDouble("sens", 1.0).toFloat(),
+			invertX = o.optBoolean("invX", false),
+			invertY = o.optBoolean("invY", false))
+	}
+
+	fun setGyroSettings(settings: GyroSettings)
+	{
+		val o = JSONObject()
+		o.put("mode", settings.mode.name)
+		o.put("sens", settings.sensitivity.toDouble())
+		o.put("invX", settings.invertX)
+		o.put("invY", settings.invertY)
+		profile().put(KEY_GYRO, o)
 		save()
 	}
 

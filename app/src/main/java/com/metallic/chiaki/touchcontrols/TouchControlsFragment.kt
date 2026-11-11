@@ -50,6 +50,22 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 	private val binding get() = _binding!!
 
 	private var layoutEditor: ControlsLayoutEditor? = null
+	private var gyroAim: GyroAim? = null
+
+	// the right stick can be driven by three sources at once, their output is summed
+	private var rightStickVec = Vector(0f, 0f)
+	private var lookVec = Vector(0f, 0f)
+	private var gyroVec = Vector(0f, 0f)
+
+	private fun updateRightStick()
+	{
+		val x = (rightStickVec.x + lookVec.x + gyroVec.x).coerceIn(-1f, 1f)
+		val y = (rightStickVec.y + lookVec.y + gyroVec.y).coerceIn(-1f, 1f)
+		ownControllerState = ownControllerState.copy().apply {
+			rightX = (Short.MAX_VALUE * x).toInt().toShort()
+			rightY = (Short.MAX_VALUE * y).toInt().toShort()
+		}
+	}
 
 	override val isLayoutEditing: Boolean get() = layoutEditor?.editing == true
 	override fun startLayoutEdit() { layoutEditor?.startEditing() }
@@ -92,15 +108,14 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 			leftY = quantizeStick(it.y)
 		}}
 
-		binding.rightAnalogStickView.stateChangedCallback = { ownControllerState = ownControllerState.copy().apply {
-			rightX = quantizeStick(it.x)
-			rightY = quantizeStick(it.y)
-		}}
+		binding.rightAnalogStickView.stateChangedCallback = { rightStickVec = it; updateRightStick() }
+		binding.touchLookView.stateChangedCallback = { lookVec = it; updateRightStick() }
 
-		binding.touchLookView.stateChangedCallback = { ownControllerState = ownControllerState.copy().apply {
-			rightX = quantizeStick(it.x)
-			rightY = quantizeStick(it.y)
-		}}
+		val gyro = GyroAim(requireContext())
+		gyro.stateChangedCallback = { gyroVec = it; updateRightStick() }
+		gyro.activeChangedCallback = { binding.gyroButtonView.active = it }
+		binding.gyroButtonView.pressedCallback = { gyro.onButton(it) }
+		gyroAim = gyro
 
 		// listed in drawing order (bottom to top), which is also the priority for selecting overlapping controls
 		layoutEditor = ControlsLayoutEditor(
@@ -120,13 +135,18 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 				ControlsLayoutEditor.Control("share", "Share", binding.shareButtonView),
 				ControlsLayoutEditor.Control("r2", "R2", binding.r2ButtonView),
 				ControlsLayoutEditor.Control("r1", "R1", binding.r1ButtonView),
-				ControlsLayoutEditor.Control("options", "Options", binding.optionsButtonView)
+				ControlsLayoutEditor.Control("options", "Options", binding.optionsButtonView),
+				ControlsLayoutEditor.Control("gyro", "Tombol GYRO", binding.gyroButtonView)
 			),
 			ControlsLayoutStore(requireContext())
 		).also {
 			it.onLookSettingsChanged = { s ->
 				binding.touchLookView.sensitivity = s.sensitivity
 				binding.touchLookView.invertY = s.invertY
+			}
+			it.onGyroSettingsChanged = { s ->
+				gyroAim?.settings = s
+				binding.gyroButtonView.mode = s.mode
 			}
 			it.applyLayout()
 		}
@@ -136,8 +156,22 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 		})
 	}
 
+	override fun onResume()
+	{
+		super.onResume()
+		gyroAim?.start()
+	}
+
+	override fun onPause()
+	{
+		gyroAim?.stop()
+		super.onPause()
+	}
+
 	override fun onDestroyView()
 	{
+		gyroAim?.stop()
+		gyroAim = null
 		layoutEditor?.stopEditing()
 		layoutEditor = null
 		super.onDestroyView()

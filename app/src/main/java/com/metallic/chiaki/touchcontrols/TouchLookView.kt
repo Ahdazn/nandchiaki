@@ -11,16 +11,15 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.abs
-import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sign
 
 /**
  * Touch-look area: swiping a finger inside this view emulates moving the right analog stick,
  * as used for camera control in shooters on mobile.
  *
- * The stick deflection follows the finger *speed* (not its distance from the touch-down point):
- * moving the finger fast tilts the stick far, holding the finger still brings the stick back to the center.
+ * The distance the finger travels is converted into an amount of stick deflection over time
+ * (stick * seconds), which is then played back at up to full deflection. So a long or fast swipe really
+ * pushes the stick all the way and keeps it there until the whole distance has been "played", instead of
+ * just giving a short pulse. A higher sensitivity means more camera rotation for the same swipe distance.
  */
 class TouchLookView @JvmOverloads constructor(
 	context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -29,12 +28,15 @@ class TouchLookView @JvmOverloads constructor(
 	companion object
 	{
 		const val MIN_SENSITIVITY = 0.2f
-		const val MAX_SENSITIVITY = 3.0f
+		const val MAX_SENSITIVITY = 6.0f
 
-		/** Finger speed that gives full stick deflection at sensitivity 1.0 */
+		/** At sensitivity 1.0 a finger speed of this many dp per second gives full stick deflection */
 		private const val FULL_SPEED_DP_PER_SECOND = 600f
-		private const val DEADZONE = 0.02f
-		private const val CURVE_EXPONENT = 1.2f
+
+		/** Upper limit for the not yet played movement, in seconds of full deflection */
+		private const val MAX_BACKLOG_SECONDS = 1.0f
+
+		private const val EPSILON = 0.0005f
 	}
 
 	/** Emulated right stick, both axes in -1..1, positive y is down (same convention as AnalogStickView) */
@@ -53,8 +55,16 @@ class TouchLookView @JvmOverloads constructor(
 	private var pointerId = -1
 	private var lastRawX = 0f
 	private var lastRawY = 0f
+
+	/** finger movement (px) since the last frame */
 	private var accumX = 0f
 	private var accumY = 0f
+
+	/** movement that still has to be played back, in stick * seconds */
+	private var pendingX = 0f
+	private var pendingY = 0f
+
+	private var loopRunning = false
 	private var lastFrameNanos = 0L
 	private var touchX = 0f
 	private var touchY = 0f
@@ -83,34 +93,44 @@ class TouchLookView @JvmOverloads constructor(
 	{
 		override fun run()
 		{
-			if(pointerId < 0)
-				return
 			val now = System.nanoTime()
 			val dt = ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0.004f, 0.1f)
 			lastFrameNanos = now
 
-			// finger speed in dp per second, measured on screen (independent of the view's scale)
-			val vx = accumX / density / dt
-			val vy = accumY / density / dt
+			// finger movement of this frame (dp) -> stick deflection over time (stick * seconds)
+			val gain = sensitivity / FULL_SPEED_DP_PER_SECOND
+			pendingX = (pendingX + accumX / density * gain).coerceIn(-MAX_BACKLOG_SECONDS, MAX_BACKLOG_SECONDS)
+			pendingY = (pendingY + accumY / density * gain).coerceIn(-MAX_BACKLOG_SECONDS, MAX_BACKLOG_SECONDS)
 			accumX = 0f
 			accumY = 0f
 
-			val fullSpeed = FULL_SPEED_DP_PER_SECOND / sensitivity
-			val x = shape(vx / fullSpeed)
-			var y = shape(vy / fullSpeed)
-			if(invertY)
-				y = -y
-			setState(Vector(x, y))
+			// play it back at up to full deflection; what does not fit into this frame is kept for the next ones
+			val x = (pendingX / dt).coerceIn(-1f, 1f)
+			val y = (pendingY / dt).coerceIn(-1f, 1f)
+			pendingX -= x * dt
+			pendingY -= y * dt
+			setState(Vector(x, if(invertY) -y else y))
+
+			if(pointerId < 0 && abs(pendingX) < EPSILON && abs(pendingY) < EPSILON)
+			{
+				// finger lifted and everything was played back
+				pendingX = 0f
+				pendingY = 0f
+				loopRunning = false
+				setState(Vector(0f, 0f))
+				return
+			}
 			postOnAnimation(this)
 		}
 	}
 
-	private fun shape(n: Float): Float
+	private fun ensureLoop()
 	{
-		val a = min(abs(n), 1f)
-		if(a < DEADZONE)
-			return 0f
-		return sign(n) * a.pow(CURVE_EXPONENT)
+		if(loopRunning)
+			return
+		loopRunning = true
+		lastFrameNanos = System.nanoTime()
+		postOnAnimation(frameRunnable)
 	}
 
 	private fun setState(newState: Vector)
@@ -124,11 +144,8 @@ class TouchLookView @JvmOverloads constructor(
 
 	private fun release()
 	{
+		// the loop keeps running until the movement that is still pending has been played back
 		pointerId = -1
-		accumX = 0f
-		accumY = 0f
-		removeCallbacks(frameRunnable)
-		setState(Vector(0f, 0f))
 		invalidate()
 	}
 
@@ -158,10 +175,7 @@ class TouchLookView @JvmOverloads constructor(
 					lastRawY = event.getRawY(index)
 					touchX = event.getX(index)
 					touchY = event.getY(index)
-					accumX = 0f
-					accumY = 0f
-					lastFrameNanos = System.nanoTime()
-					postOnAnimation(frameRunnable)
+					ensureLoop()
 					invalidate()
 				}
 			}
@@ -197,7 +211,13 @@ class TouchLookView @JvmOverloads constructor(
 	override fun onDetachedFromWindow()
 	{
 		removeCallbacks(frameRunnable)
+		loopRunning = false
 		pointerId = -1
+		accumX = 0f
+		accumY = 0f
+		pendingX = 0f
+		pendingY = 0f
+		setState(Vector(0f, 0f))
 		super.onDetachedFromWindow()
 	}
 }
