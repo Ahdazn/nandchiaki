@@ -126,6 +126,9 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 		}
 	}
 
+	/** See [Session.getStats]. Returns null unless the stream is connected. */
+	fun getStats(): LongArray? = if(_state.value is StreamStateConnected) session?.getStats() else null
+
 	fun attachToTextureView(textureView: TextureView)
 	{
 		textureView.surfaceTextureListener = object: TextureView.SurfaceTextureListener {
