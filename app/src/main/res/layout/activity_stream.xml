@@ -76,6 +76,19 @@
                 app:switchPadding="8dp" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/statsButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Statistik"
+                android:textAllCaps="false"
+                android:textColor="@color/stream_text"
+                app:strokeColor="@color/stream_text"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/videoEnhanceButton" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/videoEnhanceButton"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="wrap_content"
@@ -142,5 +155,19 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- live performance overlay, toggled with the "Statistik" button -->
+    <TextView
+        android:id="@+id/statsOverlayText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="12dp"
+        android:background="#99000000"
+        android:fontFamily="monospace"
+        android:padding="6dp"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:visibility="gone" />
 
 </FrameLayout>
