@@ -118,6 +118,16 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 		binding.surfaceView.setEnhancement(enhancePrefs.mode, enhancePrefs.strength)
 		viewModel.session.attachToFsrView(binding.surfaceView)
+		val statsOverlay = StreamStatsOverlay(
+			this, binding.statsOverlayText, viewModel.session,
+			"${enhanceProfile.width}x${enhanceProfile.height} ${enhanceProfile.codec.name.removePrefix("CODEC_")} ${enhanceProfile.maxFPS}fps"
+		) { if(binding.surfaceView.enhanceMode == VideoEnhanceMode.OFF) "" else "Peningkat: ${binding.surfaceView.enhanceMode.label}" }
+		if(enhancePrefs.statsVisible)
+			statsOverlay.start()
+		binding.statsButton.setOnClickListener {
+			enhancePrefs.statsVisible = statsOverlay.toggle()
+			showOverlay()
+		}
 		binding.videoEnhanceButton.setOnClickListener {
 			showVideoEnhanceDialog(this, binding.surfaceView, enhancePrefs)
 			showOverlay()

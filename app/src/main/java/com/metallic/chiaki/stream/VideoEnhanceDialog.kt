@@ -30,6 +30,11 @@ class VideoEnhancePrefs(context: Context)
 	var strength: Float
 		get() = prefs.getFloat("strength", 0.8f)
 		set(value) { prefs.edit().putFloat("strength", value).apply() }
+
+	/** whether the performance overlay is shown */
+	var statsVisible: Boolean
+		get() = prefs.getBoolean("stats", false)
+		set(value) { prefs.edit().putBoolean("stats", value).apply() }
 }
 
 /** Dialog to choose the video enhancement mode and the sharpening strength. Changes apply immediately. */
