@@ -23,6 +23,8 @@ typedef struct android_chiaki_video_decoder_t
 	int32_t target_width;
 	int32_t target_height;
 	ChiakiCodec target_codec;
+	uint64_t stat_frames_output; // decoded frames that were shown, for the stats overlay (use atomic access)
+	uint64_t stat_bytes_in; // bytes of video data received, for the stats overlay (use atomic access)
 } AndroidChiakiVideoDecoder;
 
 ChiakiErrorCode android_chiaki_video_decoder_init(AndroidChiakiVideoDecoder *decoder, ChiakiLog *log, int32_t target_width, int32_t target_height, ChiakiCodec codec);

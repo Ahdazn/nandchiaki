@@ -23,6 +23,8 @@ ChiakiErrorCode android_chiaki_video_decoder_init(AndroidChiakiVideoDecoder *dec
 	decoder->target_height = target_height;
 	decoder->target_codec = codec;
 	decoder->shutdown_output = false;
+	decoder->stat_frames_output = 0;
+	decoder->stat_bytes_in = 0;
 	return chiaki_mutex_init(&decoder->codec_mutex, false);
 }
 
@@ -143,6 +145,7 @@ bool android_chiaki_video_decoder_video_sample(uint8_t *buf, size_t buf_size, vo
 {
 	bool r = true;
 	AndroidChiakiVideoDecoder *decoder = user;
+	__atomic_fetch_add(&decoder->stat_bytes_in, (uint64_t)buf_size, __ATOMIC_RELAXED);
 	chiaki_mutex_lock(&decoder->codec_mutex);
 
 	if(!decoder->codec)
@@ -196,6 +199,8 @@ static void *android_chiaki_video_decoder_output_thread_func(void *user)
 		if(status >= 0)
 		{
 			AMediaCodec_releaseOutputBuffer(decoder->codec, (size_t)status, info.size != 0);
+			if(info.size != 0)
+				__atomic_fetch_add(&decoder->stat_frames_output, 1, __ATOMIC_RELAXED);
 			if(info.flags & AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM)
 			{
 				CHIAKI_LOGI(decoder->log, "AMediaCodec reported EOS");

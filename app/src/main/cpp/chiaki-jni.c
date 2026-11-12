@@ -404,6 +404,30 @@ JNIEXPORT jint JNICALL JNI_FCN(sessionJoin)(JNIEnv *env, jobject obj, jlong ptr)
 	return chiaki_session_join(&session->session);
 }
 
+/**
+ * Returns { decoded frames, video bytes received, packets received, packets lost }, all counted since the stream started.
+ * Must only be called while the stream is connected.
+ */
+JNIEXPORT jlongArray JNICALL JNI_FCN(sessionGetStats)(JNIEnv *env, jobject obj, jlong ptr)
+{
+	AndroidChiakiSession *session = (AndroidChiakiSession *)ptr;
+	if(!session)
+		return NULL;
+	uint64_t received = 0;
+	uint64_t lost = 0;
+	chiaki_packet_stats_get(&session->session.stream_connection.packet_stats, false, &received, &lost);
+	jlong values[4];
+	values[0] = (jlong)__atomic_load_n(&session->video_decoder.stat_frames_output, __ATOMIC_RELAXED);
+	values[1] = (jlong)__atomic_load_n(&session->video_decoder.stat_bytes_in, __ATOMIC_RELAXED);
+	values[2] = (jlong)received;
+	values[3] = (jlong)lost;
+	jlongArray result = E->NewLongArray(env, 4);
+	if(!result)
+		return NULL;
+	E->SetLongArrayRegion(env, result, 0, 4, values);
+	return result;
+}
+
 JNIEXPORT void JNICALL JNI_FCN(sessionSetSurface)(JNIEnv *env, jobject obj, jlong ptr, jobject surface)
 {
 	AndroidChiakiSession *session = (AndroidChiakiSession *)ptr;
